@@ -450,6 +450,7 @@ def load_episodes(directory, capacity=None, minlen=1, coverage_sampling=False, c
     rewards_eps = {}
     for filename in filenames:
         try:
+            filename = pathlib.Path(filename)
             with filename.open('rb') as f:
                 episode = np.load(f)
                 episode = {k: episode[k] for k in episode.keys()}
