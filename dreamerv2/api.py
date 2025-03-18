@@ -354,12 +354,12 @@ def cl_train_loop(envs, config, outputs=None, eval_envs=None):
                 *args, mode='explore' if should_expl(total_step) else 'train') # 탐색 단계인지 학습 단계인지 판단
             
 
-            # 평가 에피소드 수행 후 결과 기록
+            # 평가 에피소드 수행 후 결과 기록하는 함수
             def eval_per_episode(ep, task_idx):
-                length = len(ep['reward']) - 1
-                score = float(ep['reward'].astype(np.float64).sum())
-                logger.scalar('eval_return_{}'.format(task_idx), score)
-                logger.scalar('eval_length_{}'.format(task_idx), length)
+                length = len(ep['reward']) - 1 # 에피소드 길길이
+                score = float(ep['reward'].astype(np.float64).sum()) # 에피소드 동안 받은 총 보상
+                logger.scalar('eval_return_{}'.format(task_idx), score) # 태스크별 총 return 값 저장
+                logger.scalar('eval_length_{}'.format(task_idx), length) # 태스크별 에피소드 길이 저장
                 
                 # 평가 결과를 비디오로 저장 (설정된 주기마다)
                 if should_video_eval(total_step):
@@ -367,17 +367,17 @@ def cl_train_loop(envs, config, outputs=None, eval_envs=None):
                         logger.video(f'eval_{task_idx}_{total_step.value}', ep[key])
                 
                 # 재구성 오류 평가 (모델이 입력 데이터를 얼마나 잘 재구성하는지 확인)
-                ep = {k: np.expand_dims(v, axis=0) for k, v in ep.items()}
-                if should_recon(total_step):
-                    model_loss, _, _, _ = agnt.wm.loss(ep)
-                    logger.scalar('eval_recon_loss_{}'.format(task_idx), model_loss)
+                ep = {k: np.expand_dims(v, axis=0) for k, v in ep.items()} # 데이터를 차원 확장하여 모델이 처리할 수 있는 형태로 변환
+                if should_recon(total_step): 
+                    model_loss, _, _, _ = agnt.wm.loss(ep) # 월드 모델의 reconstruction loss 계산
+                    logger.scalar('eval_recon_loss_{}'.format(task_idx), model_loss) # 재구성 오류 저장
                 logger.write()
 
-            # 학습 단계를 실행하는 함수 정의
+            # 에이전트가 리플레이 버퍼에서 데이터를 샘플링하여 학습 수행
             def train_step(tran, worker):
                 if should_train(total_step):
                     for _ in range(config.train_steps):
-                        mets = train_agent(next(dataset))  # 학습 수행
+                        mets = train_agent(next(dataset))  # 미니 배치를 가져와 에이전트 학습
                         [metrics[key].append(value) for key, value in mets.items()]
                 
                 # 설정된 주기마다 로깅 수행
@@ -396,28 +396,32 @@ def cl_train_loop(envs, config, outputs=None, eval_envs=None):
 
             # 평가 드라이버 생성 및 평가 실행
             eval_driver = common.Driver(_eval_envs, cl=config.cl)
-            eval_driver.on_episode(eval_per_episode)  # 평가 루프 실행
+            eval_driver.on_episode(eval_per_episode)  # 평가 에피소드가 끝날 때마다 실행
             
-            # 평가 정책 설정 (일반적으로 학습 정책과 동일)
-            eval_policy = lambda *args: agnt.policy(*args, mode='eval')
+            # 평가 정책 설정, 학습 정책이 실제 환경에서 얼마나 성능이 좋은지 평가(일반적으로 학습 정책과 동일)
+            # 탐색 없이 결정론적 방식으로 행동 수행
+            # 평가 시에는 학습된 최적 행동을 수행하도록 설정
+            eval_policy = lambda *args: agnt.policy(*args, mode='eval') # 탐색 없이 평가 모드로 정책 실행
 
-            # 학습 반복문: 설정된 스텝이 될 때까지 반복
+            # 학습이 태스크마다 다른 스텝 수를 가질 경우, 각 태스크별로 학슥 스텝 수를 다르게 설정
             if unbalanced_steps is not None:
-                steps_limit = int(unbalanced_steps[task_id])
+                steps_limit = int(unbalanced_steps[task_id]) # 태스크별로 지정된 학습 스텝을 가져옴
             else:
-                steps_limit = config.steps
+                steps_limit = config.steps # 기본적으로 각 태스크가 학습할 스텝 수
 
-            while step < steps_limit:
+            while step < steps_limit: # 설정된 스텝 수만큼 학습 수행
                 logger.write()
-                driver(policy, steps=config.eval_every)  # 학습 수행
+                # policy를 사용하여 현재 학습된 정책에 따라 환경에서 행동을 수행
+                # eval_every는 평가 주기를 조절, 즉 일정한 스텝마다 에이전트가 환경과 상호작용하며 학습 진행
+                driver(policy, steps=config.eval_every)
                 
                 # 탐색 및 평가 정책을 분리하는 경우 다르게 실행
-                if config.sep_exp_eval_policies:
+                if config.sep_exp_eval_policies: # 탐색 정책과 평가 정책을 다르게 설정
                     eval_driver(eval_policy, steps=config.eval_steps)
-                else:
+                else: # 탐색 정책과 평가 정책을 동일하게 설정
                     eval_driver(policy, steps=config.eval_steps)
                 
-                # 학습된 에이전트 변수 저장
+                # 학습된 모델의 가중치를 저장하여 이후 학습에 사용
                 agnt.save(logdir / 'variables.pkl')
 
             # 다음 태스크로 이동
