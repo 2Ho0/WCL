@@ -70,10 +70,10 @@ register(
     entry_point='gym_minigrid.envs:DoorKeyEnv'
 )
 
-register(
-    id='MiniGrid-DoorKey-9x9-v0',
-    entry_point='gym_minigrid.envs:DoorKeyEnv'
-)
+# register(
+#     id='MiniGrid-DoorKey-9x9-v0',
+#     entry_point='gym_minigrid.envs:DoorKeyEnv'
+# )
 
 register(
     id='MiniGrid-DoorKey-16x16-v0',

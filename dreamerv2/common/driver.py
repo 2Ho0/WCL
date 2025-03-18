@@ -1,6 +1,6 @@
 import numpy as np
 
-
+# 환경과 상호작용하면서 데이터를 수집하고, 여러 개의 환경을 병렬로 실행할 수 있도록 관관
 class Driver:
 
     def __init__(self, envs, cl=False, **kwargs):
@@ -40,6 +40,7 @@ class Driver:
                 [fn(tran, worker=i, **self._kwargs) for fn in self._on_resets]
                 self._eps[i] = [tran]
             obs = {k: np.stack([o[k] for o in self._obs]) for k in self._obs[0]}
+            #현재 observation을 기반으로 policy를 사용하여 행동 결정
             actions, self._state = policy(obs, self._state, **self._kwargs)
             actions = [
                 {k: np.array(actions[k][i]) for k in actions}
@@ -64,9 +65,9 @@ class Driver:
             # obs = [e.step(a) for e, a in zip(self._envs, actions)]
             obs = [ob() if callable(ob) else ob for ob in obs]
             for i, (act, ob) in enumerate(zip(actions, obs)):
-                tran = {k: self._convert(v) for k, v in {**ob, **act}.items()}
+                tran = {k: self._convert(v) for k, v in {**ob, **act}.items()} # transition 생성성
                 [fn(tran, worker=i, **self._kwargs) for fn in self._on_steps]
-                self._eps[i].append(tran)
+                self._eps[i].append(tran) # episode에 transition 저장장
                 step += 1
                 if ob['is_last']:
                     ep = self._eps[i]
