@@ -202,7 +202,7 @@ def cl_train_loop(envs, config, outputs=None, eval_envs=None):
     replay.logger = logger
     
     # 현재 진행 중인 작업과 진행된 스텝 계산
-    if unbalanced_steps is not None: # 태스크 별로 스텝이 다를 경우우
+    if unbalanced_steps is not None: # 태스크 별로 스텝이 다를 경우
         tot_steps_after_task = np.cumsum(unbalanced_steps) # 각 태스크가 끝나는 누적 스텝을 계산
         #현재까지 학습된 총 스텝을 기준으로 어떤 태스크를 학습해야 하는지 결정
         # 현재 학습된 스텝 수가 각 태스크의 최대 스텝보다 작은 경우의 인덱스를 찾음 -> 아직 완료되지 않은 태스크를 현재 태스크로 설정
@@ -336,10 +336,10 @@ def cl_train_loop(envs, config, outputs=None, eval_envs=None):
 
             # 데이터셋 준비 (배치 크기: 16, 길이: 50)
             dataset = iter(replay.dataset(**config.dataset)) # replay buffer에서 배치 크기 16, 길이 50으로 샘플링
-            train_agent = common.CarryOverState(agnt.train) # 이전 상태를 유지하며 학습할 수 있도록 보장장
+            train_agent = common.CarryOverState(agnt.train) # 이전 상태를 유지하며 학습할 수 있도록 보장
             train_agent(next(dataset))  # 첫 번째 배치로 에이전트 학습
             
-            # 이전 학습된 모델 가중치를 불러와 이어서 학습
+            # 이전 학습된 모델 가중치를 불러와 이어서 학습 -> 태스크 별로 구분하거나 이 부분을 임베딩 방식으로 해서 과거 데이터를 가져오는게 적절한 방법으로 보임임
             if (logdir / 'variables.pkl').exists(): # 파일이 존재하는지 확인
                 print("Loading agent.")
                 agnt.load(logdir / 'variables.pkl') # 파일이 존재하면 이전 학습된 모델 가중치를 불러옴
@@ -347,7 +347,7 @@ def cl_train_loop(envs, config, outputs=None, eval_envs=None):
                 # 사전 학습 수행 (지정된 pretrain 횟수만큼 반복)
                 print('Pretrain agent.')
                 for _ in range(config.pretrain): 
-                    train_agent(next(dataset)) # 첫 번째 배치로 에이전트 학습습
+                    train_agent(next(dataset)) # 첫 번째 배치로 에이전트 학습
 
             # 정책 설정: 탐색 모드 또는 학습 모드 결정
             policy = lambda *args: agnt.policy(

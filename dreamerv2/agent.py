@@ -119,35 +119,88 @@ class WorldModel(common.Module):
         return state, outputs, metrics
 
     def loss(self, data, state=None):
+        # 입력 데이터를 전처리 (정규화 등)
         data = self.preprocess(data)
+        
+        # 관찰 데이터를 잠재 표현(latent space)으로 변환 (CNN 등 사용)
         embed = self.encoder(data)
-        post, prior = self.rssm.observe(
-            embed, data['action'], data['is_first'], state)
+        
+        # RSSM (Recurrent State-Space Model)에서 잠재 상태 예측
+        # post: posterior (실제 관찰 기반 상태)
+        # prior: prior (이전 상태에서 예측한 상태)
+        post, prior = self.rssm.observe(embed, data['action'], data['is_first'], state)
+        
+        # KL Divergence 손실 계산 (모델이 예측한 prior와 실제 post의 차이를 최소화)
+        # kl_value: KL 값의 원본 데이터
         kl_loss, kl_value = self.rssm.kl_loss(post, prior, **self.config.kl)
+        
+        # KL 손실 값이 0차원(스칼라)인지 확인 (예상치 못한 차원 방지)
         assert len(kl_loss.shape) == 0
+
+        # 손실을 저장할 딕셔너리 초기화
         likes = {}
-        losses = {'kl': kl_loss}
+        losses = {'kl': kl_loss}  # KL loss 먼저 저장
+
+        # RSSM에서 Feature(잠재 상태 특징 벡터) 추출
         feat = self.rssm.get_feat(post)
+
+        # 예측 목표(이미지, 보상, 종료 여부 등)에 대해 손실 계산
         for name, head in self.heads.items():
+            # 해당 예측 목표가 그래디언트를 받는 대상(decoder, reward, discount)인지 확인
             grad_head = (name in self.config.grad_heads)
+
+            # 학습할 경우 feature를 사용, 그렇지 않으면 stop_gradient 적용
+            # 학습할 경우 RSSM까지 gradient 전달, 그렇지 않으면 RSSM까지 gradient 전달하지 않음
             inp = feat if grad_head else tf.stop_gradient(feat)
+
+            # 해당 예측 목표를 위한 Head 네트워크 실행
             out = head(inp)
+
+            # 예측 결과가 딕셔너리 형태인지 확인 후 변환
             dists = out if isinstance(out, dict) else {name: out}
+
+            # 각 예측 항목(예: 보상, 이미지 등)에 대해 손실 계산
             for key, dist in dists.items():
+                # 모델이 예측한 확률 분포에서 실제 데이터가 나올 로그 확률 계산
                 like = tf.cast(dist.log_prob(data[key]), tf.float32)
+
+                # 로그 확률 값을 저장
                 likes[key] = like
+
+                # 손실 값은 로그 확률의 평균값을 부호 반전 (-mean(log_prob))
                 losses[key] = -like.mean()
+
+        # 최종 모델 손실 계산 (각 손실에 대한 가중치를 적용)
         model_loss = sum(
-            self.config.loss_scales.get(k, 1.0) * v for k, v in losses.items())
+            self.config.loss_scales.get(k, 1.0) * v for k, v in losses.items()
+        )
+
+        # 학습 과정에서 사용할 중간 결과 저장
         outs = dict(
-            embed=embed, feat=feat, post=post,
-            prior=prior, likes=likes, kl=kl_value)
+            embed=embed,  # 인코딩된 관찰 데이터
+            feat=feat,    # RSSM에서 추출된 특징 벡터
+            post=post,    # Posterior 분포
+            prior=prior,  # Prior 분포
+            likes=likes,  # 로그 확률 값 (예측 정확도 측정)
+            kl=kl_value   # KL 손실 값
+        )
+
+        # 손실 값을 기록하기 위한 메트릭 저장
         metrics = {f'{name}_loss': value for name, value in losses.items()}
+
+        # KL 손실의 평균값 저장
         metrics['model_kl'] = kl_value.mean()
+
+        # Prior 분포와 Posterior 분포의 엔트로피(Entropy) 계산 및 저장
         metrics['prior_ent'] = self.rssm.get_dist(prior).entropy().mean()
         metrics['post_ent'] = self.rssm.get_dist(post).entropy().mean()
+
+        # 마지막 시점의 잠재 상태(latent state) 저장 (다음 스텝에서 활용 가능)
         last_state = {k: v[:, -1] for k, v in post.items()}
+
+        # 최종 손실 값, 마지막 상태, 중간 결과, 학습 메트릭을 반환
         return model_loss, last_state, outs, metrics
+
 
     def forward(self, data, state):
         data = self.preprocess(data)

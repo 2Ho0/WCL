@@ -7,6 +7,7 @@ MUJOCO_LOG.TXT
 logs/
 path/
 wandb/
+logs_cl/
 continual_rl/
 notebooks/*.ipynb
 notebooks/*.pdf
