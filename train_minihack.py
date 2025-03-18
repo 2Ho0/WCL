@@ -125,6 +125,7 @@ def run_minihack(args):
         'wandb.group': args.wandb_group,
         'wandb.name': f"{dv2.defaults.expl_behavior}_cl-small={args.cl_small}_{tag}" if args.cl else f"{dv2.defaults.expl_behavior}_single-env={args.env}_{tag}", 
         'wandb.project': args.wandb_proj_name,
+        'wandb.entity': 'hyeonglee-dku'
     }).parse_flags()
 
     # from https://github.com/danijar/crafter-baselines/blob/main/plan2explore/main.py

@@ -127,13 +127,14 @@ class Replay:
         #     ret['er_task_{0}'.format(i)] = len([v for k, v in self._tasks.items() if v == i])
         return ret
     
+    # 스텝마다 agent의 transition을 기록하고 에피소드가 끝나면 전체 데이터 저장
     def add_step(self, transition, worker=0):
-        episode = self._ongoing_eps[worker]
+        episode = self._ongoing_eps[worker] # 현재 환경에서 진행중인 에피소드 데이터를 가져옴옴
         for key, value in transition.items():
-            episode[key].append(value)
-        if transition['is_last']:
-            self.add_episode(episode)
-            episode.clear()
+            episode[key].append(value) # 에피소드 데이터에 transition(obs, action, reward, is_last) 추가가
+        if transition['is_last']: # 에피소드가 종료된 경우
+            self.add_episode(episode) # 에피소드 저장
+            episode.clear() # 에피소드 초기화
 
     def add_episode(self, episode):
         length = eplen(episode)

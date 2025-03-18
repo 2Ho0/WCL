@@ -1,7 +1,7 @@
 import json
 import pathlib
 import re
-
+from ruamel.yaml import YAML
 
 class Config(dict):
     SEP = '.'
@@ -29,7 +29,8 @@ class Config(dict):
         elif filename.suffix in ('.yml', '.yaml'):
             import ruamel.yaml as yaml
             with filename.open('w') as f:
-                yaml.safe_dump(dict(self), f)
+                yaml = YAML(typ='safe', pure=True)  # 최신 방식으로 객체 생성
+                yaml.dump(dict(self), f)  # 새로운 dump 방식 사용
         else:
             raise NotImplementedError(filename.suffix)
 

@@ -16,7 +16,7 @@ def parse_minigrid_args(args=None):
     parser.add_argument('--logdir', type=str, default='logs', help='directory for the tb logs and exp replay episodes.')
     parser.add_argument('--eval_skills', default=False, action='store_true',
                         help='Flag evaluating our model on the multiskill envs.')
-    parser.add_argument('--wandb_group', type=str, default='experiment', help='name of the gruop in wandb')
+    parser.add_argument('--wandb_group', type=str, default='hyeonglee-dku', help='name of the gruop in wandb')
     parser.add_argument('--wandb_proj_name', type=str, default='minihack',
                         help='unique str for wandb projs.')
     parser.add_argument('--wandb_dir', type=str, default=None,

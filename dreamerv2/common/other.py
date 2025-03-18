@@ -191,13 +191,16 @@ class Timer:
             outdurs.clear()
         return metrics
 
-
+# 함수 fn의 state를 유지하면서 실행할 수 있도록 하는 클래스
+# RNN이나 LSTM같은 순환 신경망을 사용하여 상태를 유지할 경우 연속적인 상태 학습이 가능하도록 함함
 class CarryOverState:
 
     def __init__(self, fn):
-        self._fn = fn
-        self._state = None
+        self._fn = fn # 상태를 유지해야 하는 함수
+        self._state = None # 초기 상태 None
 
     def __call__(self, *args):
-        self._state, out = self._fn(*args, self._state)
+        # fn을 실행할 때 이전 상태를 전달하고, 새로운 상태를 받아옴
+        self._state, out = self._fn(*args, self._state)  
+        #fn의 실행 결과로 새로운 state와 out을 반환, out은 학습 과정에서 사용
         return out
