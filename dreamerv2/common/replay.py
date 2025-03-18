@@ -129,29 +129,35 @@ class Replay:
     
     # 스텝마다 agent의 transition을 기록하고 에피소드가 끝나면 전체 데이터 저장
     def add_step(self, transition, worker=0):
-        episode = self._ongoing_eps[worker] # 현재 환경에서 진행중인 에피소드 데이터를 가져옴옴
+        episode = self._ongoing_eps[worker] # 현재 환경에서 진행중인 에피소드 데이터를 가져옴
         for key, value in transition.items():
-            episode[key].append(value) # 에피소드 데이터에 transition(obs, action, reward, is_last) 추가가
+            episode[key].append(value) # 에피소드 데이터에 transition(obs, action, reward, is_last) 추가
         if transition['is_last']: # 에피소드가 종료된 경우
             self.add_episode(episode) # 에피소드 저장
             episode.clear() # 에피소드 초기화
 
     def add_episode(self, episode):
-        length = eplen(episode)
+        length = eplen(episode)  # 에피소드 길이 측정
         if length < self._minlen:
             print(f'Skipping short episode of length {length}.')
-            return
-        self._total_steps += length
-        self._loaded_steps += length
-        self._total_episodes += 1
-        self._loaded_episodes += 1
-        episode = {key: convert(value) for key, value in episode.items()}
-        task = self.get_task()
+            return  # 너무 짧은 에피소드는 저장하지 않음
+        
+        self._total_steps += length  # 총 스텝 수 업데이트
+        self._loaded_steps += length  # 버퍼 내 총 저장된 스텝 수 업데이트
+        self._total_episodes += 1  # 총 에피소드 수 업데이트
+        self._loaded_episodes += 1  # 버퍼 내 저장된 에피소드 수 업데이트
+        
+        episode = {key: convert(value) for key, value in episode.items()}  # 데이터 변환
+        task = self.get_task()  # 현재 태스크 ID 가져오기
+        
+        # 에피소드 파일을 저장
         filename = save_episode(self._directory, episode, task, self._total_episodes)
-        # add candidate to the replay buffer
+        
+        # 저장된 에피소드를 replay buffer에 추가
         self._complete_eps[str(filename)] = episode
-        self._tasks[str(filename)] = task
+        self._tasks[str(filename)] = task  # 태스크별로 구분하여 저장
         self._reward_eps[str(filename)] = episode['reward'].astype(np.float64).sum()
+
 
         if self._total_episodes % self._uncertainty_recalculation == 0:
             self._episodes_uncertainties.clear()
@@ -283,8 +289,9 @@ class Replay:
             rewards_norm = e_r / e_r.sum()
             episode_key = self._random.choice(episodes_keys, p=rewards_norm)
         elif self.recent_past_sampl_thres > np.random.random():
-            episode_key = episodes_keys[
-                int(np.floor(np.random.triangular(0, len(episodes_keys), len(episodes_keys), 1)))
+            episode_key = episodes_keys[ # episodes_keys 리스트가 과거->최신 순서로 정렬되어 있음
+                int(np.floor(np.random.triangular(0, len(episodes_keys), len(episodes_keys), 1))) # 0~len(episodes_keys) 사이의 삼각분포에서 샘플링
+                # 과거 데이터부터 현재 데이터 중에서 1개를 선택하여 샘플링
             ]
         elif self._uncertainty_sampling:
             self._check_if_uncertainties_available()
@@ -347,25 +354,25 @@ class Replay:
                 self._episodes_uncertainties[ep_key] = ep_uncertainty
 
     def _enforce_limit(self):
-        if not self._capacity:
+        if not self._capacity: #용량 제한이 없을 경우 실행 중지
             return
         while self._loaded_episodes > 1 and self._loaded_steps > self._capacity:
             # Relying on Python preserving the insertion order of dicts.
-            if self._coverage_sampling:
+            if self._coverage_sampling: # 유사한 데이터를 줄이고 다양성을 유지하는 방식
                 _, candidate = heapq.heappop(self._episodes_heap)
                 episode = self._complete_eps[str(candidate)]
                 del self._lstm_states[str(candidate)]
             elif self._reservoir_sampling:
                 candidate, episode = random.sample(self._complete_eps.items(), 1)[0]
-            else:
+            else: # FIFO 방식(가장 오래된 데이터 삭제)
                 # Relying on Python preserving the insertion order of dicts.
                 # first-in-first-out
                 candidate, episode = next(iter(self._complete_eps.items()))
             self._loaded_steps -= eplen(episode)
             self._loaded_episodes -= 1
-            del self._complete_eps[str(candidate)]
-            del self._tasks[str(candidate)]
-            del self._reward_eps[str(candidate)]
+            del self._complete_eps[str(candidate)] # 에피소드 삭제
+            del self._tasks[str(candidate)] # 태스크 삭제
+            del self._reward_eps[str(candidate)] # 보상 정보 삭제
             if str(candidate) in self._episodes_uncertainties:
                 del self._episodes_uncertainties[str(candidate)]
         
