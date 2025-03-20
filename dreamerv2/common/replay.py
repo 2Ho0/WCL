@@ -96,22 +96,28 @@ class Replay:
     def coverage_maximization_initialization(self, directory):
         self._replay_cell = tf.keras.layers.ConvLSTM2D(
             filters=self._coverage_sampling_args["filters"], kernel_size=self._coverage_sampling_args["kernel_size"],
-            padding="same", return_sequences=False, return_state=True, activation="elu")
-               
-        self._episodes_heap = []
-        self._lstm_states = {}
-        if bool(self._complete_eps):
+            padding="same", return_sequences=False, return_state=True, activation="elu"
+        )  # ConvLSTM2D를 사용한 LSTM 정의
+
+        self._episodes_heap = []  # 우선순위 큐 초기화
+        self._lstm_states = {}  # LSTM 상태 저장 딕셔너리
+
+        if bool(self._complete_eps):  # 기존 데이터가 있다면 LSTM 상태 생성
             for filename, episode in self._complete_eps.items():
                 if self._coverage_sampling_args["normalize_lstm_state"]:
-                    self._lstm_states[str(filename)] = self._replay_cell(tf.expand_dims(np.array(episode['image'])/255,axis=0))[2].numpy().reshape(-1)  # LSTM has return_state=True, so it returns three outputs, and last one is a cell state
-                    self._lstm_states[str(filename)] /= np.linalg.norm(self._lstm_states[str(filename)])
+                    self._lstm_states[str(filename)] = self._replay_cell(
+                        tf.expand_dims(np.array(episode['image']) / 255, axis=0)
+                    )[2].numpy().reshape(-1)  # LSTM에서 셀 상태를 가져와 1D 벡터로 변환
+                    self._lstm_states[str(filename)] /= np.linalg.norm(self._lstm_states[str(filename)])  # 정규화
                 else:
-                    self._lstm_states[str(filename)] = self._replay_cell(tf.expand_dims(np.array(episode['image'])/255,axis=0))[2].numpy().reshape(-1)  # LSTM has return_state=True, so it returns three outputs, and last one is a cell state
-            
+                    self._lstm_states[str(filename)] = self._replay_cell(
+                        tf.expand_dims(np.array(episode['image']) / 255, axis=0)
+                    )[2].numpy().reshape(-1)  # 셀 상태를 벡터로 변환하여 저장
+
             with open(directory/f'coverage_max_heap.pkl', 'rb') as handle:
                 self._episodes_heap = pickle.load(handle)
 
-                
+                0,len(list), len(list), 1
     @property
     def stats(self):
         ret = {
@@ -359,9 +365,9 @@ class Replay:
         while self._loaded_episodes > 1 and self._loaded_steps > self._capacity:
             # Relying on Python preserving the insertion order of dicts.
             if self._coverage_sampling: # 유사한 데이터를 줄이고 다양성을 유지하는 방식
-                _, candidate = heapq.heappop(self._episodes_heap)
-                episode = self._complete_eps[str(candidate)]
-                del self._lstm_states[str(candidate)]
+                _, candidate = heapq.heappop(self._episodes_heap) # 가장 낮은 점수를 가진 데이터 선택
+                episode = self._complete_eps[str(candidate)] # 제거할 에피소드 가져오기
+                del self._lstm_states[str(candidate)] # LSTM 상태 삭제
             elif self._reservoir_sampling:
                 candidate, episode = random.sample(self._complete_eps.items(), 1)[0]
             else: # FIFO 방식(가장 오래된 데이터 삭제)
